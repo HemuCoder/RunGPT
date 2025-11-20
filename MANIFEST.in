@@ -1,0 +1,25 @@
+# Include README and LICENSE
+include README.md
+include LICENSE
+include requirements.txt
+
+# Include prompt templates
+recursive-include rungpt/context/prompts *.txt
+
+# Exclude development files
+exclude .gitignore
+exclude .env
+exclude .env.*
+
+# Exclude tests and examples from package
+prune tests
+prune examples
+
+# Exclude build artifacts
+prune build
+prune dist
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.so
+global-exclude .DS_Store
+
