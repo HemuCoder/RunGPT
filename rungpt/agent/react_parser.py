@@ -1,7 +1,8 @@
-"""ReAct Parser - 解析模型输出中的 Action"""
+"""ReAct Parser - 解析模型输出中的 Action（增强版）"""
 import re
 from typing import Optional, Dict, Any, List
 import json
+from .parser_utils import fuzzy_parse_json, extract_action_robust
 
 
 class Action:
@@ -17,17 +18,18 @@ class Action:
 
 
 class ReActParser:
-    """解析 ReAct 格式的模型输出"""
+    """解析 ReAct 格式的模型输出（增强版）"""
     
     @staticmethod
     def parse(text: str) -> Optional[Action]:
         """
-        解析 Action
+        解析 Action（增强版，支持模糊匹配和 JSON 修复）
         
         支持格式：
         1. Action: tool_name[input]
-        2. Action: Finish[answer]
-        3. Action: tool_name(param="value") (legacy)
+        2. Action: tool_name(param="value")
+        3. Action: tool_name{"key": "value"}
+        4. Action: Finish[answer]
         
         Args:
             text: 模型输出文本
@@ -35,6 +37,25 @@ class ReActParser:
         Returns:
             Action 对象或 None
         """
+        # 使用增强的提取方法
+        result = extract_action_robust(text)
+        if result:
+            name, params = result
+            
+            # 检查是否是 Finish action
+            if name.upper() == "FINISH":
+                # 如果 params 是字典且有 answer 键，直接使用
+                if isinstance(params, dict) and "answer" in params:
+                    return Action("FINISH", params, text)
+                # 否则，将整个 params 作为 answer
+                elif isinstance(params, dict) and "input" in params:
+                    return Action("FINISH", {"answer": params["input"]}, text)
+                else:
+                    return Action("FINISH", {"answer": str(params)}, text)
+            
+            return Action(name, params, text)
+        
+        # 回退到原有的解析方法
         # 新格式：tool_name[input]
         action = ReActParser._parse_bracket_format(text)
         if action:
