@@ -133,21 +133,83 @@ class ReActAgent(AgentBase):
                 thread.add_assistant(response)
                 return final_answer
             
-            # 既没有 Action 也没有 Final Answer
+            # 既没有 Action 也没有 Final Answer - 插入引导消息
             if self.verbose:
-                print(f"⚠️  模型输出格式错误，未检测到 Action 或 Final Answer")
-                
-                current_step.is_final = True
-                current_step.final_answer = response
+                print(f"⚠️  模型输出格式错误,未检测到 Action 或 Final Answer")
+                print(f"📝 插入引导消息,要求模型重新输出正确格式")
+            
+            # 记录当前步骤
+            current_step.thought = thought
             self.react_steps.append(current_step)
+            
+            # 将错误的响应添加到对话
             thread.add_assistant(response)
-            return response
+            
+            # 插入引导消息,要求模型输出正确格式
+            guidance_message = (
+                "你的输出格式不正确。请严格按照以下格式输出:\n\n"
+                "如果需要使用工具:\n"
+                "Thought: [你的思考过程]\n"
+                "Action: tool_name[{\"param\": \"value\"}]\n\n"
+                "如果已经得到最终答案:\n"
+                "Thought: [你的思考过程]\n"
+                "Action: FINISH[{\"answer\": \"你的最终答案\"}]\n\n"
+                "请重新输出。"
+            )
+            thread.add_user(guidance_message)
+            
+            # 继续循环,给模型一次纠正的机会
+            continue
         
-        # 达到最大步数
+        # 达到最大步数 - 强制要求输出最终答案
         if self.verbose:
             print(f"\n⚠️  达到最大步数限制 ({self.profile.max_steps})")
+            print(f"📝 插入强制消息,要求agent总结并输出最终答案")
         
-        return "达到最大步数限制"
+        # 插入强制性消息,要求agent总结并输出最终答案
+        force_finish_message = (
+            "你已经达到最大步数限制。请立即基于目前已有的所有信息和观察结果,总结并输出最终答案。\n\n"
+            "必须使用以下格式:\n"
+            "Thought: [总结你的分析过程和已获得的信息]\n"
+            "Action: FINISH[{\"answer\": \"你的最终答案\"}]\n\n"
+            "即使信息不完整,也请给出你目前能够得出的最佳答案。"
+        )
+        thread.add_user(force_finish_message)
+        
+        # 最后一次调用模型获取总结
+        final_response = self._call_model(thread)
+        
+        if self.verbose:
+            print(f"\n{'='*70}")
+            print(f"🔄 强制总结步骤")
+            print(f"{'='*70}")
+        
+        # 尝试解析最终答案
+        action = self.parser.parse(final_response)
+        if action and action.name == "FINISH":
+            final_answer = action.params.get("answer", "")
+            if self.verbose:
+                print(f"✅ Final Answer: {final_answer}")
+                print(f"{'='*70}\n")
+            thread.add_assistant(final_response)
+            return final_answer
+        
+        # 如果还是没有正确格式,尝试提取Final Answer
+        if self.parser.has_finish(final_response):
+            final_answer = self._extract_final_answer(final_response)
+            if self.verbose:
+                print(f"✅ Final Answer: {final_answer}")
+                print(f"{'='*70}\n")
+            thread.add_assistant(final_response)
+            return final_answer
+        
+        # 实在没办法,返回模型的响应
+        if self.verbose:
+            print(f"⚠️  模型仍未按格式输出,返回原始响应")
+            print(f"{'='*70}\n")
+        
+        thread.add_assistant(final_response)
+        return final_response
     
     def _extract_final_answer(self, response: str) -> str:
         """
