@@ -62,12 +62,21 @@ class ToolRegistry:
             **kwargs: 传递给 Tool 的其他参数
             
         Example:
-            tools = ToolRegistry()
+            @tools.tool
+            def search(query: str): ...
             
-            @tools.tool(description="搜索网络")
-            def search(query: str) -> str:
-                return f"结果: {query}"
+            @tools.tool(description="搜索")
+            def search(query: str): ...
         """
+        # 支持 @registry.tool (无括号)
+        if callable(name):
+            func = name
+            tool_name = func.__name__
+            # 这里的 description 和 kwargs 应该是空的或默认值
+            tool = Tool(name=tool_name, func=func, description=description, **kwargs)
+            self._tools[tool_name] = tool
+            return func
+
         def decorator(func):
             tool_name = name or func.__name__
             tool = Tool(name=tool_name, func=func, description=description, **kwargs)

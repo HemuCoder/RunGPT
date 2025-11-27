@@ -35,13 +35,16 @@ class Tool:
         if not self.description and self.func.__doc__:
             self.description = self.func.__doc__.strip().split('\n')[0]
     
-    def call(self, **kwargs) -> Any:
+    def call(self, **kwargs) -> ToolResult:
         """
         调用工具
         
-        如果设置了 args_schema (Pydantic 模型)，会先进行参数验证和类型转换
+        如果设置了 args_schema (Pydantic 模型),会先进行参数验证和类型转换
+        
+        Returns:
+            ToolResult 对象
         """
-        # 如果有 Pydantic 模型，先验证参数
+        # 如果有 Pydantic 模型,先验证参数
         if self.args_schema is not None:
             try:
                 # 使用 Pydantic 验证和转换参数
@@ -49,24 +52,24 @@ class Tool:
                 # 转换为字典传递给函数
                 kwargs = validated_args.dict() if hasattr(validated_args, 'dict') else validated_args.model_dump()
             except Exception as e:
-                # 验证失败，返回错误
+                # 验证失败,返回错误
                 return ToolResult.fail(f"参数验证失败: {str(e)}")
         
         # 调用函数
-        result = self.func(**kwargs)
-        
-        # 如果返回的不是 ToolResult，自动包装
-        if not isinstance(result, ToolResult):
-            # 如果是字典且包含 success 字段，尝试转换
-            if isinstance(result, dict) and "success" in result:
-                if result["success"]:
-                    return ToolResult.ok(result.get("data"))
-                else:
-                    return ToolResult.fail(result.get("error", "Unknown error"))
-            # 否则视为成功结果
-            return ToolResult.ok(result)
-        
-        return result
+        try:
+            result = self.func(**kwargs)
+            
+            # 强制要求返回 ToolResult
+            if not isinstance(result, ToolResult):
+                raise TypeError(
+                    f"工具 '{self.name}' 必须返回 ToolResult 对象,但返回了 {type(result).__name__}。"
+                    f"请使用 ToolResult.ok(data) 或 ToolResult.fail(error) 包装返回值。"
+                )
+            
+            return result
+        except Exception as e:
+            # 捕获执行错误
+            return ToolResult.fail(f"工具执行失败: {str(e)}")
     
     def get_schema(self) -> Dict[str, Any]:
         """获取工具的完整 Schema"""

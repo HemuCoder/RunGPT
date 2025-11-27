@@ -3,15 +3,24 @@
 使用 ReActAgent 进行多步推理和工具调用
 """
 import os
+import sys
+
+# 将项目根目录添加到 sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from dotenv import load_dotenv
 from rungpt import ReActAgent, Thread, ToolRegistry
+from rungpt.tools import ToolResult
 
 # 加载环境变量
 load_dotenv()
 
+# 实例化工具注册表
+registry = ToolRegistry()
+
 # 注册工具
-@ToolRegistry.tool
-def search_stock(symbol: str) -> str:
+@registry.tool
+def search_stock(symbol: str) -> ToolResult:
     """
     查询股票信息
     
@@ -19,7 +28,7 @@ def search_stock(symbol: str) -> str:
         symbol: 股票代码
     
     Returns:
-        股票信息
+        ToolResult 对象
     """
     # 模拟股票数据
     stocks = {
@@ -27,10 +36,11 @@ def search_stock(symbol: str) -> str:
         "TSLA": "特斯拉，当前价格: $242.80，涨幅: -0.5%",
         "GOOGL": "谷歌，当前价格: $138.20，涨幅: +0.8%"
     }
-    return stocks.get(symbol, f"找不到股票代码 {symbol} 的信息")
+    result = stocks.get(symbol, f"找不到股票代码 {symbol} 的信息")
+    return ToolResult.ok(result)
 
-@ToolRegistry.tool
-def calculate_investment(amount: float, price: float) -> str:
+@registry.tool
+def calculate_investment(amount: float, price: float) -> ToolResult:
     """
     计算可以购买的股票数量
     
@@ -39,14 +49,15 @@ def calculate_investment(amount: float, price: float) -> str:
         price: 股票价格
     
     Returns:
-        可购买数量
+        ToolResult 对象
     """
     shares = int(amount / price)
     remaining = amount - (shares * price)
-    return f"可购买 {shares} 股，剩余 ${remaining:.2f}"
+    result = f"可购买 {shares} 股，剩余 ${remaining:.2f}"
+    return ToolResult.ok(result)
 
-@ToolRegistry.tool
-def analyze_trend(symbol: str, days: int = 30) -> str:
+@registry.tool
+def analyze_trend(symbol: str, days: int = 30) -> ToolResult:
     """
     分析股票趋势
     
@@ -55,18 +66,20 @@ def analyze_trend(symbol: str, days: int = 30) -> str:
         days: 分析天数，默认 30 天
     
     Returns:
-        趋势分析
+        ToolResult 对象
     """
     # 模拟趋势分析
-    return f"{symbol} 在过去 {days} 天呈现上升趋势，建议持有"
+    result = f"{symbol} 在过去 {days} 天呈现上升趋势，建议持有"
+    return ToolResult.ok(result)
 
 def main():
     print("=== RunGPT 示例 3: ReAct 推理 ===\n")
     
     # 创建 ReActAgent
     agent = ReActAgent(
+        system_prompt="你是一个智能助手，可以使用工具帮助用户解决问题。",
         model="gpt-4o-mini",
-        tools=ToolRegistry,
+        tools=registry,
         max_steps=5,  # 最大推理步数
         verbose=True,
         temperature=0.7
