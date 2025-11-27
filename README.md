@@ -315,6 +315,11 @@ model = load_model("custom", model_name="my-model")
 - [任务规划](examples/04_planner_executor.py)
 - [记忆管理](examples/05_memory_usage.py)
 
+## 📚 文档
+
+- [框架开发指南](FRAMEWORK_GUIDE.md): 专为 AI 开发者设计的框架集成与使用指南。
+- [架构文档](rungpt/CLAUDE.md): 详细的内部架构设计文档。
+
 ## 🏗️ 架构设计
 
 ```
