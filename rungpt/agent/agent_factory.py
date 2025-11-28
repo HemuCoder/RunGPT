@@ -3,7 +3,6 @@ from typing import Dict, Any, Optional
 from .agent_base import AgentBase, AgentProfile
 from .simple_agent import SimpleAgent
 from .react_agent import ReActAgent
-from .plan_execute_agent import PlanExecuteAgent
 from ..models import load_model
 from ..threads import MemoryManager
 from ..tools import ToolRegistry
@@ -15,7 +14,6 @@ class AgentFactory:
     AGENT_TYPES = {
         "simple": SimpleAgent,
         "react": ReActAgent,
-        "plan_execute": PlanExecuteAgent,
     }
     
     @classmethod
@@ -72,20 +70,13 @@ class AgentFactory:
             **kwargs
         }
         
-        # 根据类型创建 Agent
-        if agent_type in ["react", "simple"]:
-            return agent_class(
-                system_prompt=system_prompt,
-                model=model,
-                tools=tools,
-                **agent_kwargs
-            )
-        else:
-            return agent_class(
-                system_prompt=system_prompt,
-                model=model,
-                **agent_kwargs
-            )
+        # 创建 Agent（所有类型都支持 tools）
+        return agent_class(
+            system_prompt=system_prompt,
+            model=model,
+            tools=tools,
+            **agent_kwargs
+        )
     
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> AgentBase:

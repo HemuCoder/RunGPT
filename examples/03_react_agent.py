@@ -82,7 +82,9 @@ def main():
         tools=registry,
         max_steps=5,  # 最大推理步数
         verbose=True,
-        temperature=0.7
+        temperature=0.7,
+        stream=True,
+        debug=True
     )
     
     # 场景 1: 单步查询

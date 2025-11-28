@@ -1,7 +1,6 @@
 """Registry - 工具注册表"""
 from typing import Dict, Callable, List, Optional, Any
 from .tool import Tool
-from .validators import ToolValidator, ValidationError
 
 
 class ToolRegistry:
@@ -14,9 +13,8 @@ class ToolRegistry:
     3. 完整注册: registry.register_tool(Tool(...))
     """
     
-    def __init__(self, enable_validation: bool = False):
+    def __init__(self):
         self._tools: Dict[str, Tool] = {}
-        self.validator = ToolValidator() if enable_validation else None
     
     def register(self, name: str, func: Callable, description: str = "", 
                  schema: Optional[Dict[str, Any]] = None) -> None:
@@ -35,9 +33,6 @@ class ToolRegistry:
         """
         tool = Tool(name=name, func=func, description=description)
         self._tools[name] = tool
-        
-        if self.validator and schema:
-            self.validator.register_schema(name, schema)
     
     def register_tool(self, tool: Tool) -> None:
         """
@@ -103,14 +98,9 @@ class ToolRegistry:
             return f"Error: Tool '{name}' is disabled"
         
         try:
-            # Validate if validator is enabled
-            if self.validator:
-                    self.validator.validate(name, params)
-            
+            # Tool.call() 内部已经处理 Pydantic 验证
             result = tool.call(**params)
             return str(result)
-        except ValidationError as e:
-            return f"Validation Error: {str(e)}"
         except Exception as e:
             return f"Error: {str(e)}"
     
@@ -142,13 +132,5 @@ class ToolRegistry:
             return True
         return False
     
-    def set_validation_schema(self, name: str, schema: Dict[str, Any]) -> None:
-        """Set validation schema for tool"""
-        if self.validator:
-            self.validator.register_schema(name, schema)
-    
-    def blacklist_tool(self, name: str) -> None:
-        """Blacklist tool (prevent execution)"""
-        if self.validator:
-            self.validator.blacklist_tool(name)
+
 

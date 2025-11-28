@@ -1,14 +1,10 @@
 """Agent Base - Agent 抽象基类"""
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List, Union, Type, TypeVar
+from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
-from pydantic import BaseModel
 from ..threads import Thread, MemoryManager
 from ..models import ModelInterface
 from ..context import ContextManager
-from .structured_output import StructuredOutputManager
-
-T = TypeVar("T", bound=BaseModel)
 
 
 class AgentProfile:
@@ -139,50 +135,29 @@ class AgentBase(ABC):
     def run(
         self, 
         task: str, 
-        thread: Optional[Thread] = None,
-        response_model: Optional[Type[T]] = None
-    ) -> Union[str, T]:
+        thread: Optional[Thread] = None
+    ) -> str:
         """
         执行任务
         
         Args:
             task: 任务描述
             thread: 对话线程（可选）
-            response_model: Pydantic 模型类（可选，用于结构化输出）
             
         Returns:
-            执行结果（字符串或 Pydantic 对象）
+            执行结果（字符串）
         """
         thread = thread or Thread()
         self.current_trace = AgentTrace(self.profile.name, task)
         
         try:
-            # 如果需要结构化输出，注入格式说明
-            output_manager = None
-            if response_model:
-                output_manager = StructuredOutputManager(response_model)
-                format_instruction = output_manager.get_format_instruction()
-                # 将格式说明追加到任务描述中
-                task_with_format = f"{task}\n{format_instruction}"
-            else:
-                task_with_format = task
-
             self._pre_run(task, thread)
             
-            # 执行具体逻辑（使用可能带有格式说明的任务）
-            result_str = self._execute(task_with_format, thread)
+            # 执行具体逻辑
+            result_str = self._execute(task, thread)
             
             self._post_run(task, thread, result_str)
             self.current_trace.finish("success")
-            
-            # 如果需要结构化输出，解析结果
-            if output_manager:
-                try:
-                    return output_manager.parse_response(result_str)
-                except Exception as e:
-                    # 如果解析失败，记录错误但返回原始字符串（或者抛出异常？）
-                    # 这里选择抛出异常，因为用户明确要求了结构化输出
-                    raise ValueError(f"结构化输出解析失败: {e}")
             
             return result_str
             
@@ -214,6 +189,10 @@ class AgentBase(ABC):
         """执行后钩子"""
         self.current_trace.add_step("post_run", {"result": result[:100]})
         self._on_finish(task, thread, result)
+        
+        # 🔍 Debug 模式：在任务结束后统一打印完整对话历史
+        if self.debug:
+            self._print_final_debug(thread)
         
         if self.memory:
             self.memory.save_thread(thread)
@@ -249,9 +228,7 @@ class AgentBase(ABC):
         
         params = {"temperature": self.profile.temperature, **kwargs}
         
-        # 🔍 Debug 模式：打印完整 Context
-        if self.debug:
-            self._print_debug_context(context)
+
         
         self.current_trace.add_step("model_call", {
             "model": self.profile.model_name,
@@ -280,17 +257,31 @@ class AgentBase(ABC):
         """获取执行追踪"""
         return self.current_trace.to_dict() if self.current_trace else None
 
-    def _print_debug_context(self, context: List[Dict[str, str]]) -> None:
-        """打印调试上下文信息"""
-        print("\n" + "="*30 + " [DEBUG: Prompt Context] " + "="*30)
-        print(f"Messages Count: {len(context)}")
+    def _print_final_debug(self, thread: Thread) -> None:
+        """打印最终的完整对话历史（包含 System Prompt）"""
+        print("\n" + "="*25 + " [DEBUG: Final Conversation History] " + "="*25)
+        print(f"Agent: {self.profile.name}")
         
-        for i, msg in enumerate(context):
+        # 重新构建完整 context（包含 system prompt）
+        full_context = self.context_manager.build_context(
+            thread=thread,
+            agent_type=self.__class__.__name__.replace("Agent", "").lower(),
+            tools=getattr(self, 'tools', None),
+            skills=self.skills,
+            memory=self.memory,
+            system_prompt=self.profile.extra.get("system_prompt")
+        )
+        
+        print(f"Total Messages: {len(full_context)}")
+        print("="*80)
+        
+        # 打印完整 context（包含 system）
+        for i, msg in enumerate(full_context, 1):
             role = msg.get('role', 'unknown')
             content = msg.get('content', '')
             
-            print(f"\n[Message {i+1}] ({role.upper()}):")
-            print("-" * 20)
+            print(f"\n[Message {i}] ({role.upper()}):")
+            print("-" * 70)
             print(content)
-            
+        
         print("\n" + "="*80 + "\n")

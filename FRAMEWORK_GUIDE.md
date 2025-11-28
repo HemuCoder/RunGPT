@@ -19,7 +19,8 @@ RunGPT 提供了多种预置 Agent，适用于不同场景：
 
 *   **SimpleAgent**: 适用于单轮对话、简单问答或无需工具的纯文本生成。
 *   **ReActAgent**: 核心 Agent，支持 "思考-行动-观察" 循环，适用于需要调用工具解决复杂问题的场景。
-*   **PlanExecuteAgent**: 完整的 "计划-执行" 推理循环，适用于复杂任务的自动分解和执行。
+
+**复杂任务**: 使用 Workflow 模式组合多个 Agent，实现任务分解、条件路由、并行执行等高级功能。
 
 **使用示例 (ReActAgent)**:
 
@@ -47,22 +48,6 @@ agent = ReActAgent(
 # 运行任务
 thread = Thread()
 result = agent.run("帮我查询北京明天的天气", thread)
-```
-
-**使用示例 (PlanExecuteAgent)**:
-
-```python
-from rungpt import PlanExecuteAgent, Thread
-
-# 初始化 Agent (system_prompt 有默认值,可省略)
-agent = PlanExecuteAgent(
-    model="gpt-4o-mini",
-    verbose=True
-)
-
-# 运行任务 - 自动分解和执行
-thread = Thread()
-result = agent.run("制定一份为期一周的 Python 学习计划", thread)
 ```
 
 ### 2.2 工具系统 (Tool System)
@@ -95,57 +80,115 @@ def calculate_sum(a: int, b: int) -> ToolResult:
         return ToolResult.fail(f"计算出错: {str(e)}")
 ```
 
-### 2.3 结构化输出 (Structured Output)
-
-**新特性**: 所有 Agent 现在支持 Pydantic 结构化输出,让 LLM 返回强类型对象而非字符串。
-
-**使用方法**:
-
-```python
-from pydantic import BaseModel, Field
-from rungpt import SimpleAgent, Thread
-
-class UserInfo(BaseModel):
-    name: str = Field(..., description="用户姓名")
-    age: int = Field(..., description="用户年龄")
-    profession: str = Field(..., description="职业")
-
-agent = SimpleAgent(
-    system_prompt="你是一个信息提取助手。",
-    model="gpt-4o-mini"
-)
-
-thread = Thread()
-text = "我叫李雷,今年25岁,是一名软件工程师。"
-
-# 传入 response_model 参数
-user_info = agent.run(
-    f"从以下文本中提取用户信息:\n{text}",
-    thread,
-    response_model=UserInfo  # 关键参数
-)
-
-print(user_info.name)  # "李雷"
-print(user_info.age)   # 25
-```
-
-**支持的 Agent**:
-- `SimpleAgent`: 直接提取结构化信息
-- `ReActAgent`: 工具调用后返回结构化结果
-- `PlanExecuteAgent`: 多步骤执行后返回结构化总结
-
-**注意事项**:
-1. `response_model` 是可选参数,不传则返回 `str`
-2. 如果 LLM 输出不符合 Schema,会抛出 `ValueError`
-3. `PlanExecuteAgent` 会在规划阶段自动忽略结构化输出要求,只在最终总结时应用
-
-### 2.4 记忆系统 (Memory)
+### 2.3 记忆系统 (Memory)
 
 `MemoryManager` 用于管理跨任务的短期记忆和对话历史。
 
 **使用模式**:
 - **存储**: `memory.store(key, value, category)`
 - **检索**: `memory.recall(key)` 或 `memory.recall_by_category(category)`
+
+### 2.4 工作流系统 (Workflow)
+
+**v2.1 新特性**: 引入 Workflow 层以支持复杂的多步骤任务编排。
+
+**核心概念**:
+- **Step**: 所有流程节点的基类
+- **Pipeline**: 串行执行一组 Step
+- **Router**: 根据条件选择执行路径
+- **Parallel**: 并行执行多个 Step
+- **PlanExecutePattern**: 任务分解 → 执行 → 总结的完整模式
+
+#### 2.4.1 线性流程 (Pipeline)
+
+```python
+from rungpt.workflow import Pipeline, AgentStep
+from rungpt import ReActAgent, SimpleAgent
+
+# 1. 定义 Agent
+analyst = ReActAgent(...)
+writer = SimpleAgent(...)
+
+# 2. 定义 Pipeline
+flow = Pipeline([
+    AgentStep(analyst, name="analyze", output_key="analysis"),
+    AgentStep(writer, name="write", input_key="analysis")
+])
+
+# 3. 执行
+result = flow.run({"topic": "AI 趋势"})
+```
+
+#### 2.4.2 Plan-Execute 模式（推荐）
+
+**适用场景**: 需要自动任务分解和依赖管理的复杂任务
+
+```python
+from rungpt import SimpleAgent, ReActAgent
+from rungpt.workflow import PlanExecutePattern, WorkflowContext
+
+# 1. 定义 3 个专门的 Agent
+planner = SimpleAgent(
+    system_prompt="你是任务规划助手，擅长分解复杂任务。",
+    model="gpt-4o-mini"
+)
+
+executor = ReActAgent(
+    system_prompt="你是执行助手，负责完成具体子任务。",
+    model="gpt-4o-mini",
+    tools=tools  # 可以调用工具
+)
+
+summarizer = SimpleAgent(
+    system_prompt="你是总结助手，负责汇总结果。",
+    model="gpt-4o-mini"
+)
+
+# 2. 创建 Pattern
+pattern = PlanExecutePattern(
+    planner=planner,
+    executor=executor,
+    summarizer=summarizer
+)
+
+# 3. 使用
+ctx = WorkflowContext({"task": "制定学习计划"})
+result = pattern.run(ctx)
+
+# 4. 获取中间结果
+print(ctx.plan)          # 任务列表
+print(ctx.task_results)  # 每个任务的结果
+print(ctx.result)        # 最终总结
+```
+
+**Pattern 自动处理**:
+- ✅ JSON 任务列表解析
+- ✅ 依赖关系管理
+- ✅ 按依赖顺序执行
+- ✅ 传递前置任务结果
+- ✅ 汇总所有结果
+
+#### 2.4.3 条件路由与并行
+
+```python
+from rungpt.workflow import Pipeline, Router, Parallel, AgentStep
+
+flow = Pipeline([
+    # 并行搜集信息
+    Parallel([
+        AgentStep(tech_agent, name="tech"),
+        AgentStep(biz_agent, name="biz")
+    ]),
+    
+    # 根据结果路由
+    Router(
+        routes=[
+            (lambda ctx: len(ctx.tech) > 1000, AgentStep(expert_writer)),
+        ],
+        default=AgentStep(junior_writer)
+    )
+])
+```
 
 ### 2.5 模型层 (Models)
 
@@ -191,7 +234,6 @@ my_project/
 *   **参数解析错误**: 检查工具函数的参数类型提示是否正确，尽量使用简单类型 (str, int, bool) 或 Pydantic 模型。
 *   **死循环**: 检查 `ReActAgent` 的 `max_steps` 设置，或检查工具是否总是返回相同的失败信息。
 *   **工具执行失败**: 确认工具返回 `ToolResult`,不是 `str` 或其他类型。
-*   **结构化输出解析失败**: 检查 Pydantic 模型的字段是否允许 `None`,或者 LLM 是否正确理解了 Schema。
 
 ---
 *此文件作为 RunGPT 框架的自我描述，用于指导 AI 理解和使用本框架。*

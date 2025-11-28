@@ -188,6 +188,7 @@ class ReActAgent(AgentBase):
             "Action: FINISH[{\"answer\": \"你的最终答案\"}]\n\n"
             "即使信息不完整,也请给出你目前能够得出的最佳答案。"
         )
+        
         thread.add_user(force_message)
         
         final_response = self._call_model(thread)

@@ -7,7 +7,7 @@
 
 ## ✨ 特性
 
-- 🤖 **多种 Agent 类型**：SimpleAgent、ReActAgent、PlanExecuteAgent
+- 🤖 **多种 Agent 类型**：SimpleAgent、ReActAgent
 - 🔧 **工具系统**：自动 Schema 生成、参数验证、工具注册
 - 💾 **记忆管理**：跨任务短期记忆、对话历史管理
 - 📝 **上下文工程**：自动 Prompt 组装、工具/技能/记忆注入
@@ -91,23 +91,6 @@ response = agent.run("查询北京的天气", thread)
 print(response)
 ```
 
-### 4. 任务规划（Plan-Execute）
-
-```python
-from rungpt import PlanExecuteAgent, Thread
-
-# 创建 Plan-Execute Agent
-agent = PlanExecuteAgent(
-    model="gpt-4o-mini",
-    verbose=True
-)
-
-# 执行任务 - 自动规划和执行
-thread = Thread()
-result = agent.run("制定一份学习 Python 的计划并给出具体建议", thread)
-print(result)
-```
-
 ## 📚 核心模块
 
 ### Models - 模型层
@@ -131,11 +114,12 @@ for chunk in model.stream_run(messages):
 
 ### Agents - 智能体层
 
-三种预置 Agent：
+两种核心 Agent：
 
 - **SimpleAgent**：单轮对话、简单工具调用
 - **ReActAgent**：多步推理 + 工具调用循环
-- **PlanExecuteAgent**：计划-执行推理循环,适合复杂任务分解
+
+**复杂任务编排**: 使用 Workflow 模式组合多个 Agent
 
 ### Tools - 工具层
 
@@ -235,11 +219,11 @@ messages = context_manager.build_context(
 
 ## 🎯 使用场景
 
-| 场景 | 推荐 Agent | 说明 |
-|------|-----------|------|
+| 场景 | 推荐方案 | 说明 |
+|------|----------|------|
 | 纯文本生成 | SimpleAgent | 单轮对话、简单问答 |
 | 工具调用 + 推理 | ReActAgent | 需要多步工具调用的任务 |
-| 任务分解 + 执行 | PlanExecuteAgent | 复杂任务的自动分解和执行 |
+| 复杂任务编排 | Workflow | 使用 Pipeline 组合多个 Agent |
 
 ## 🔧 高级功能
 
@@ -299,7 +283,8 @@ model = load_model("custom", model_name="my-model")
 - [工具调用](examples/02_tool_calling.py)
 - [ReAct 推理](examples/03_react_agent.py)
 - [记忆管理](examples/05_memory_usage.py)
-- [Plan-Execute 推理](examples/08_plan_execute.py)
+- [工作流编排 - 线性流程](examples/10_workflow_linear.py)
+- [工作流编排 - Plan-Execute 模式](examples/13_plan_execute_workflow.py)
 
 ## 📚 文档
 
@@ -311,14 +296,18 @@ model = load_model("custom", model_name="my-model")
 ```
 RunGPT SDK
 ├── Models      # 统一多平台 LLM 调用
-├── Agents      # 3 种预置 Agent（Simple/ReAct/PlanExecute）
+├── Agents      # 2 种核心 Agent（Simple/ReAct）
 ├── Tools       # 工具注册、调用、验证
 ├── Threads     # 对话历史管理
 ├── Memory      # 跨任务短期记忆
-└── Context     # Prompt 模板、工具/技能注入、Token 管理
+├── Context     # Prompt 模板、工具/技能注入、Token 管理
+└── Workflow    # 复杂流程编排（Pipeline/Router/Parallel）
 ```
 
-**核心理念**：分层解耦，Agent 通过 ContextManager 统一管理上下文，不直接操作模型和 Prompt。
+**核心理念**：
+- **Agent 层**: SimpleAgent / ReActAgent（真正的单一职责）
+- **Workflow 层**: 复杂任务编排，组合多个 Agent
+- 分层解耦，Agent 通过 ContextManager 统一管理上下文
 
 ## 🤝 贡献
 
