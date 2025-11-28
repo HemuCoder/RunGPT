@@ -13,8 +13,8 @@ rungpt/
 │   ├── agent_base.py  # Agent 抽象基类
 │   ├── react_agent.py # ReAct 推理 Agent
 │   ├── simple_agent.py # 简单对话 Agent
-│   ├── planner_agent.py # 规划器 Agent
-│   └── executor_agent.py # 执行器 Agent
+│   ├── plan_execute_agent.py # Plan-Execute 推理 Agent
+│   └── structured_output.py # Pydantic 结构化输出管理器
 ├── tools/             # 工具系统
 │   ├── tool.py        # 工具定义
 │   ├── registry.py    # 工具注册表
@@ -46,9 +46,27 @@ rungpt/
 - 策略模式: 不同 Agent 实现不同推理策略
 - 模板方法: `_execute` 由子类实现具体逻辑
 
+**推理模式**:
+- `SimpleAgent`: 单轮对话,无工具调用
+- `ReActAgent`: Think → Act → Observe 循环,支持工具调用
+- `PlanExecuteAgent`: Plan → Execute → Summarize 循环,适合复杂任务分解
+
+**设计演进**:
+- ❌ 旧设计: Plan 和 Execute 分离为两个 Agent,需要手动串联
+- ✅ 新设计: `PlanExecuteAgent` 统一推理循环,类似 ReAct 的完整性
+- 理念: 推理模式应该是完整的循环,而非碎片化的组件
+
 **最近优化**:
+- **Pydantic 结构化输出 (v0.2.0)**: 所有 Agent 支持 `response_model` 参数,返回强类型 Pydantic 对象
+- PlanExecuteAgent 合并: 将 Planner + Executor 合并为统一的推理模式
 - ReActAgent 方法拆分: `_execute` → `_execute_step`, `_handle_action`, `_handle_finish`, `_handle_error`, `_force_finish`
 - 解析器重构: 从 279 行单文件重构为策略模式,4 个专用解析器 + 管理器
+
+**结构化输出**:
+- `structured_output.py`: 管理 Pydantic Schema 注入和 JSON 解析
+- `StructuredOutputManager`: 负责生成格式说明、解析 LLM 输出、验证 Pydantic 对象
+- 实现策略: Prompt Engineering (注入 JSON Schema) + JSON 解析 + Pydantic 验证
+- 向后兼容: `response_model` 为可选参数,不传则返回 `str`
 
 ### 解析器模块 (`agent/parsers/`)
 

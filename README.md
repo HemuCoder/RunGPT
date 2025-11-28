@@ -7,7 +7,7 @@
 
 ## ✨ 特性
 
-- 🤖 **多种 Agent 类型**：SimpleAgent、ReActAgent、PlannerAgent、ExecutorAgent
+- 🤖 **多种 Agent 类型**：SimpleAgent、ReActAgent、PlanExecuteAgent
 - 🔧 **工具系统**：自动 Schema 生成、参数验证、工具注册
 - 💾 **记忆管理**：跨任务短期记忆、对话历史管理
 - 📝 **上下文工程**：自动 Prompt 组装、工具/技能/记忆注入
@@ -91,32 +91,20 @@ response = agent.run("查询北京的天气", thread)
 print(response)
 ```
 
-### 4. 任务规划（Planner + Executor）
+### 4. 任务规划（Plan-Execute）
 
 ```python
-from rungpt import PlannerAgent, ExecutorAgent, Thread, MemoryManager
+from rungpt import PlanExecuteAgent, Thread
 
-# 创建记忆管理器
-memory = MemoryManager()
-
-# 创建规划 Agent
-planner = PlannerAgent(
+# 创建 Plan-Execute Agent
+agent = PlanExecuteAgent(
     model="gpt-4o-mini",
-    memory=memory
+    verbose=True
 )
 
-# 执行规划
+# 执行任务 - 自动规划和执行
 thread = Thread()
-plan = planner.run("制定一份学习 Python 的计划", thread)
-
-# 创建执行 Agent
-executor = ExecutorAgent(
-    model="gpt-4o-mini",
-    memory=memory
-)
-
-# 执行计划
-result = executor.run("执行学习计划", thread)
+result = agent.run("制定一份学习 Python 的计划并给出具体建议", thread)
 print(result)
 ```
 
@@ -143,12 +131,11 @@ for chunk in model.stream_run(messages):
 
 ### Agents - 智能体层
 
-四种预置 Agent：
+三种预置 Agent：
 
 - **SimpleAgent**：单轮对话、简单工具调用
 - **ReActAgent**：多步推理 + 工具调用循环
-- **PlannerAgent**：任务分解与规划
-- **ExecutorAgent**：执行规划好的任务
+- **PlanExecuteAgent**：计划-执行推理循环,适合复杂任务分解
 
 ### Tools - 工具层
 
@@ -252,8 +239,7 @@ messages = context_manager.build_context(
 |------|-----------|------|
 | 纯文本生成 | SimpleAgent | 单轮对话、简单问答 |
 | 工具调用 + 推理 | ReActAgent | 需要多步工具调用的任务 |
-| 任务分解 | PlannerAgent | 复杂任务的前置规划 |
-| 执行计划 | ExecutorAgent | 执行 PlannerAgent 的输出 |
+| 任务分解 + 执行 | PlanExecuteAgent | 复杂任务的自动分解和执行 |
 
 ## 🔧 高级功能
 
@@ -312,8 +298,8 @@ model = load_model("custom", model_name="my-model")
 - [基础对话](examples/01_simple_chat.py)
 - [工具调用](examples/02_tool_calling.py)
 - [ReAct 推理](examples/03_react_agent.py)
-- [任务规划](examples/04_planner_executor.py)
 - [记忆管理](examples/05_memory_usage.py)
+- [Plan-Execute 推理](examples/08_plan_execute.py)
 
 ## 📚 文档
 
@@ -325,7 +311,7 @@ model = load_model("custom", model_name="my-model")
 ```
 RunGPT SDK
 ├── Models      # 统一多平台 LLM 调用
-├── Agents      # 4 种预置 Agent（Simple/ReAct/Planner/Executor）
+├── Agents      # 3 种预置 Agent（Simple/ReAct/PlanExecute）
 ├── Tools       # 工具注册、调用、验证
 ├── Threads     # 对话历史管理
 ├── Memory      # 跨任务短期记忆

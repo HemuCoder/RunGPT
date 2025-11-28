@@ -1,10 +1,14 @@
 """Agent Base - Agent 抽象基类"""
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List, Union, Type, TypeVar
 from datetime import datetime
+from pydantic import BaseModel
 from ..threads import Thread, MemoryManager
 from ..models import ModelInterface
 from ..context import ContextManager
+from .structured_output import StructuredOutputManager
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class AgentProfile:
@@ -63,7 +67,6 @@ class AgentTrace:
             "error": self.error,
             "duration_seconds": (self.end_time - self.start_time).total_seconds() if self.end_time else None
         }
-
 
 class AgentBase(ABC):
     """Agent 抽象基类"""
@@ -131,30 +134,62 @@ class AgentBase(ABC):
         
         # 初始化 ContextManager
         self.context_manager = ContextManager()
-    
-    def run(self, task: str, thread: Optional[Thread] = None) -> str:
+
+
+    def run(
+        self, 
+        task: str, 
+        thread: Optional[Thread] = None,
+        response_model: Optional[Type[T]] = None
+    ) -> Union[str, T]:
         """
         执行任务
         
         Args:
             task: 任务描述
             thread: 对话线程（可选）
+            response_model: Pydantic 模型类（可选，用于结构化输出）
             
         Returns:
-            执行结果
+            执行结果（字符串或 Pydantic 对象）
         """
         thread = thread or Thread()
         self.current_trace = AgentTrace(self.profile.name, task)
         
         try:
+            # 如果需要结构化输出，注入格式说明
+            output_manager = None
+            if response_model:
+                output_manager = StructuredOutputManager(response_model)
+                format_instruction = output_manager.get_format_instruction()
+                # 将格式说明追加到任务描述中
+                task_with_format = f"{task}\n{format_instruction}"
+            else:
+                task_with_format = task
+
             self._pre_run(task, thread)
-            result = self._execute(task, thread)
-            self._post_run(task, thread, result)
+            
+            # 执行具体逻辑（使用可能带有格式说明的任务）
+            result_str = self._execute(task_with_format, thread)
+            
+            self._post_run(task, thread, result_str)
             self.current_trace.finish("success")
-            return result
+            
+            # 如果需要结构化输出，解析结果
+            if output_manager:
+                try:
+                    return output_manager.parse_response(result_str)
+                except Exception as e:
+                    # 如果解析失败，记录错误但返回原始字符串（或者抛出异常？）
+                    # 这里选择抛出异常，因为用户明确要求了结构化输出
+                    raise ValueError(f"结构化输出解析失败: {e}")
+            
+            return result_str
+            
         except Exception as e:
             self.current_trace.finish("error", str(e))
             raise
+
     
     @abstractmethod
     def _execute(self, task: str, thread: Thread) -> str:

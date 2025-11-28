@@ -3,8 +3,7 @@ from typing import Dict, Any, Optional
 from .agent_base import AgentBase, AgentProfile
 from .simple_agent import SimpleAgent
 from .react_agent import ReActAgent
-from .planner_agent import PlannerAgent
-from .executor_agent import ExecutorAgent
+from .plan_execute_agent import PlanExecuteAgent
 from ..models import load_model
 from ..threads import MemoryManager
 from ..tools import ToolRegistry
@@ -16,8 +15,7 @@ class AgentFactory:
     AGENT_TYPES = {
         "simple": SimpleAgent,
         "react": ReActAgent,
-        "planner": PlannerAgent,
-        "executor": ExecutorAgent,
+        "plan_execute": PlanExecuteAgent,
     }
     
     @classmethod

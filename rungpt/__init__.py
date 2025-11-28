@@ -14,7 +14,7 @@ from .context import ContextManager, PromptTemplate, SkillInjector, ToolInjector
 from .tools import Tool, ToolRegistry, extract_schema, Validator, ToolValidator, ValidationError
 from .agent import (
     AgentBase, AgentProfile, AgentFactory,
-    SimpleAgent, ReActAgent, PlannerAgent, ExecutorAgent,
+    SimpleAgent, ReActAgent, PlanExecuteAgent,
     Plan, Task
 )
 
@@ -33,6 +33,6 @@ __all__ = [
     "Tool", "ToolRegistry", "extract_schema", "Validator", "ToolValidator", "ValidationError",
     # Agents
     "AgentBase", "AgentProfile", "AgentFactory",
-    "SimpleAgent", "ReActAgent", "PlannerAgent", "ExecutorAgent",
+    "SimpleAgent", "ReActAgent", "PlanExecuteAgent",
     "Plan", "Task"
 ]
