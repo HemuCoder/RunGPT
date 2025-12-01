@@ -70,10 +70,27 @@ class BracketFormatParser(ParserStrategy):
         
         # 尝试解析 key=value 格式
         if '=' in input_text:
-            for part in input_text.split(','):
-                if '=' in part:
-                    key, val = part.split('=', 1)
-                    params[key.strip()] = val.strip().strip('"\'')
+            # 正则匹配: key="value" 或 key='value' 或 key=value
+            # Group 1: key
+            # Group 2: 双引号值
+            # Group 3: 单引号值
+            # Group 4: 无引号值(不含逗号)
+            pattern = r'(\w+)\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^,]+))'
+            
+            matches = list(re.finditer(pattern, input_text))
+            if matches:
+                for match in matches:
+                    key = match.group(1)
+                    # 获取非空的捕获组作为值
+                    val = match.group(2)
+                    if val is None:
+                        val = match.group(3)
+                    if val is None:
+                        val = match.group(4)
+                    
+                    if val is not None:
+                        params[key.strip()] = val.strip()
+                return params
         
         # 单个参数:推断参数名
         if not params:
