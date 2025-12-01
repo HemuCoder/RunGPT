@@ -23,7 +23,7 @@ def read_requirements():
 
 setup(
     name="rungpt",
-    version="0.2.0",
+    version="0.2.1",
     description="一个强大的 AI Agent 框架，支持多种 Agent 类型、工具调用、记忆管理和上下文工程",
     long_description=read_readme(),
     long_description_content_type="text/markdown",

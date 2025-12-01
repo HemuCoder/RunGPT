@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rungpt"
-version = "0.2.0"
+version = "0.2.1"
 description = "一个强大的 AI Agent 框架，支持多种 Agent 类型、工具调用、记忆管理和上下文工程"
 readme = "README.md"
 authors = [
@@ -49,7 +49,11 @@ Repository = "https://github.com/HemuCoder/rungpt"
 "Bug Tracker" = "https://github.com/HemuCoder/rungpt/issues"
 
 [tool.setuptools]
-packages = ["rungpt", "rungpt.agent", "rungpt.context", "rungpt.models", "rungpt.threads", "rungpt.tools"]
+# 自动发现所有包,避免手动维护遗漏
+packages = {find = {}}
+
+[tool.setuptools.packages.find]
+exclude = ["tests*", "examples*"]
 
 [tool.setuptools.package-data]
 rungpt = ["context/prompts/*.txt"]
