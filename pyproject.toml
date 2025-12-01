@@ -50,9 +50,9 @@ Repository = "https://github.com/HemuCoder/rungpt"
 
 [tool.setuptools]
 # 自动发现所有包,避免手动维护遗漏
-packages = {find = {}}
 
 [tool.setuptools.packages.find]
+where = ["."]
 exclude = ["tests*", "examples*"]
 
 [tool.setuptools.package-data]
