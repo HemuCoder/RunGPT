@@ -103,9 +103,10 @@ class UnifiedProvider(ModelInterface):
                 raise ValueError(f"解析模型响应失败: {e}")
 
     
+    
     def stream_run(self, messages: List[Dict[str, str]], **kwargs):
         """
-        流式执行模型推理
+        流式执行模型推理，带网络重试
         
         Args:
             messages: 消息列表
@@ -114,40 +115,84 @@ class UnifiedProvider(ModelInterface):
         Yields:
             str: 流式文本片段
         """
-        payload = self._build_payload(messages, stream=True, **kwargs)
-        headers = self._build_headers()
+        max_retries = 3
+        retry_delay = 1.0
         
-        response = requests.post(self.endpoint, headers=headers, json=payload, stream=True)
-        response.raise_for_status()
-        
-        buffer = ""
-        try:
-            for chunk in response.iter_content(chunk_size=None):
-                if chunk:
-                    buffer += chunk.decode("utf-8")
-                    while "\n" in buffer:
-                        line, buffer = buffer.split("\n", 1)
-                        if line.strip() == "":
-                            continue
-                        if line.startswith("data: "):
-                            data_line = line[len("data: "):].strip()
-                            if data_line == "[DONE]":
-                                return
-                            else:
-                                try:
-                                    data = json.loads(data_line)
-                                    if "choices" in data and len(data["choices"]) > 0:
-                                        delta = data["choices"][0].get("delta", {})
-                                        content = delta.get("content", "")
-                                        if content:
-                                            yield content
-                                except json.JSONDecodeError:
-                                    buffer = line + "\n" + buffer
-                                    break
-        except requests.exceptions.ChunkedEncodingError:
-            return
-        except Exception:
-            return
+        for attempt in range(max_retries):
+            try:
+                payload = self._build_payload(messages, stream=True, **kwargs)
+                headers = self._build_headers()
+                
+                response = requests.post(self.endpoint, headers=headers, json=payload, stream=True, timeout=60)
+                response.raise_for_status()
+                
+                # 成功建立连接，开始流式传输
+                buffer = ""
+                try:
+                    for chunk in response.iter_content(chunk_size=None):
+                        if chunk:
+                            buffer += chunk.decode("utf-8")
+                            while "\n" in buffer:
+                                line, buffer = buffer.split("\n", 1)
+                                if line.strip() == "":
+                                    continue
+                                if line.startswith("data: "):
+                                    data_line = line[len("data: "):].strip()
+                                    if data_line == "[DONE]":
+                                        return
+                                    else:
+                                        try:
+                                            data = json.loads(data_line)
+                                            if "choices" in data and len(data["choices"]) > 0:
+                                                delta = data["choices"][0].get("delta", {})
+                                                content = delta.get("content", "")
+                                                if content:
+                                                    yield content
+                                        except json.JSONDecodeError:
+                                            buffer = line + "\n" + buffer
+                                            break
+                    # 流式传输成功完成
+                    return
+                    
+                except requests.exceptions.ChunkedEncodingError:
+                    # 流式传输过程中的网络错误
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"流式传输中断 (尝试 {attempt + 1}/{max_retries}): ChunkedEncodingError"
+                        )
+                        logger.info(f"等待 {retry_delay:.1f} 秒后重试...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                        continue
+                    else:
+                        logger.error(f"流式传输失败，已达最大重试次数 ({max_retries})")
+                        return
+                except Exception:
+                    # 其他流式传输错误，直接返回
+                    return
+            
+            except (requests.exceptions.Timeout,
+                    requests.exceptions.ConnectionError) as e:
+                # 建立连接阶段的网络错误：重试
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        f"流式连接失败 (尝试 {attempt + 1}/{max_retries}): {e.__class__.__name__}: {e}"
+                    )
+                    logger.info(f"等待 {retry_delay:.1f} 秒后重试...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    logger.error(f"流式连接失败，已达最大重试次数 ({max_retries})")
+                    raise RuntimeError(f"流式模型调用失败（重试 {max_retries} 次后失败）: {e}")
+            
+            except requests.exceptions.HTTPError as e:
+                # HTTP 错误：不重试
+                raise RuntimeError(f"流式模型调用 HTTP 错误: {e}")
+            
+            except requests.exceptions.RequestException as e:
+                # 其他请求异常：不重试
+                raise RuntimeError(f"流式模型调用失败: {e}")
+
     
     def get_model_info(self) -> Dict[str, Any]:
         """获取模型信息"""
