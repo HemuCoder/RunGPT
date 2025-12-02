@@ -18,14 +18,26 @@ class UnifiedProvider(ModelInterface):
         model_name: str,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
+        timeout: int = 300,
         **config
     ):
+        """
+        初始化 UnifiedProvider
+        
+        Args:
+            model_name: 模型名称
+            api_key: API 密钥（可选，默认从环境变量读取）
+            base_url: API 基础 URL（可选，默认从环境变量读取）
+            timeout: 请求超时时间（秒），默认 300 秒（5分钟）
+            **config: 其他配置参数
+        """
         super().__init__(model_name, **config)
         self.api_key = api_key or os.getenv("UNIFIED_API_KEY")
         if not self.api_key:
             raise ValueError("API Key 未设置，请通过参数或环境变量 UNIFIED_API_KEY 提供")
         self.base_url = base_url or os.getenv("UNIFIED_BASE_URL", "https://vip.dmxapi.com/v1")
         self.endpoint = f"{self.base_url}/chat/completions"
+        self.timeout = timeout
     
     def _build_headers(self) -> Dict[str, str]:
         """构建请求头"""
@@ -65,7 +77,9 @@ class UnifiedProvider(ModelInterface):
                 payload = self._build_payload(messages, stream=False, **kwargs)
                 headers = self._build_headers()
                 
-                response = requests.post(self.endpoint, headers=headers, json=payload, timeout=60)
+                logger.debug(f"发起 LLM 请求，超时时间: {self.timeout}s")
+                
+                response = requests.post(self.endpoint, headers=headers, json=payload, timeout=self.timeout)
                 response.raise_for_status()
                 
                 data = response.json()
@@ -123,7 +137,9 @@ class UnifiedProvider(ModelInterface):
                 payload = self._build_payload(messages, stream=True, **kwargs)
                 headers = self._build_headers()
                 
-                response = requests.post(self.endpoint, headers=headers, json=payload, stream=True, timeout=60)
+                logger.debug(f"发起流式 LLM 请求，超时时间: {self.timeout}s")
+                
+                response = requests.post(self.endpoint, headers=headers, json=payload, stream=True, timeout=self.timeout)
                 response.raise_for_status()
                 
                 # 成功建立连接，开始流式传输
