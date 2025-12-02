@@ -4,6 +4,10 @@ from .model_interface import ModelInterface
 import os
 import json
 import requests
+import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class UnifiedProvider(ModelInterface):
@@ -44,7 +48,7 @@ class UnifiedProvider(ModelInterface):
     
     def run(self, messages: List[Dict[str, str]], **kwargs) -> str:
         """
-        执行模型推理（非流式）
+        执行模型推理（非流式），带网络重试
         
         Args:
             messages: 消息列表
@@ -53,25 +57,51 @@ class UnifiedProvider(ModelInterface):
         Returns:
             str: 模型返回内容
         """
-        try:
-            payload = self._build_payload(messages, stream=False, **kwargs)
-            headers = self._build_headers()
-            
-            response = requests.post(self.endpoint, headers=headers, json=payload, timeout=60)
-            response.raise_for_status()
-            
-            data = response.json()
-            if "choices" not in data or not data["choices"]:
-                raise ValueError(f"API 返回数据格式异常: {data}")
-            
-            return data["choices"][0]["message"]["content"]
+        max_retries = 3
+        retry_delay = 1.0  # 初始延迟 1 秒
         
-        except requests.exceptions.Timeout:
-            raise TimeoutError("模型调用超时")
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"模型调用失败: {e}")
-        except (KeyError, IndexError) as e:
-            raise ValueError(f"解析模型响应失败: {e}")
+        for attempt in range(max_retries):
+            try:
+                payload = self._build_payload(messages, stream=False, **kwargs)
+                headers = self._build_headers()
+                
+                response = requests.post(self.endpoint, headers=headers, json=payload, timeout=60)
+                response.raise_for_status()
+                
+                data = response.json()
+                if "choices" not in data or not data["choices"]:
+                    raise ValueError(f"API 返回数据格式异常: {data}")
+                
+                return data["choices"][0]["message"]["content"]
+            
+            except (requests.exceptions.Timeout, 
+                    requests.exceptions.ConnectionError,
+                    requests.exceptions.ChunkedEncodingError) as e:
+                # 网络相关错误：重试
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        f"网络错误 (尝试 {attempt + 1}/{max_retries}): {e.__class__.__name__}: {e}"
+                    )
+                    logger.info(f"等待 {retry_delay:.1f} 秒后重试...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # 指数退避
+                else:
+                    # 最后一次尝试也失败
+                    logger.error(f"网络错误，已达最大重试次数 ({max_retries})")
+                    raise TimeoutError(f"模型调用超时（重试 {max_retries} 次后失败）: {e}")
+            
+            except requests.exceptions.HTTPError as e:
+                # HTTP 错误（如 4xx, 5xx）：不重试，直接抛出
+                raise RuntimeError(f"模型调用 HTTP 错误: {e}")
+            
+            except requests.exceptions.RequestException as e:
+                # 其他请求异常：不重试
+                raise RuntimeError(f"模型调用失败: {e}")
+            
+            except (KeyError, IndexError) as e:
+                # 数据解析错误：不重试
+                raise ValueError(f"解析模型响应失败: {e}")
+
     
     def stream_run(self, messages: List[Dict[str, str]], **kwargs):
         """
